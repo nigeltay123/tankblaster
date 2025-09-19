@@ -18,6 +18,9 @@ public class BSPDungeonGenerator : MonoBehaviour
     public int maxRoomSize = 15;
     public int maxDepth = 5;        // Controls how many splits
 
+    [Header("Corridor Settings")]
+    [Min(1)] public int corridorWidth = 3; // <-- tweak in Inspector (odd numbers center perfectly)
+
     // BSP tree & rooms
     private BSPNode rootNode;
     private List<RectInt> rooms;
@@ -185,16 +188,48 @@ public class BSPDungeonGenerator : MonoBehaviour
     private Vector2Int GetRoomCenter(RectInt room)
         => new Vector2Int(room.xMin + room.width / 2, room.yMin + room.height / 2);
 
-    private void CreateHorizontalCorridor(int xStart, int xEnd, int y)
+    // --------- corridor carving (now width = corridorWidth) ---------
+
+    private void CreateHorizontalCorridor(int xStart, int xEnd, int yCenter)
     {
-        for (int x = Mathf.Min(xStart, xEnd); x <= Mathf.Max(xStart, xEnd); x++)
-            tilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
+        int xs = Mathf.Min(xStart, xEnd);
+        int xe = Mathf.Max(xStart, xEnd);
+
+        // center around yCenter
+        int half = corridorWidth / 2; // works for odd; with even, one side will be +1 wider
+
+        for (int x = xs; x <= xe; x++)
+        {
+            for (int dy = -half; dy <= half; dy++)
+            {
+                int y = yCenter + dy;
+                if (InMap(x, y))
+                    tilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
+            }
+        }
     }
 
-    private void CreateVerticalCorridor(int yStart, int yEnd, int x)
+    private void CreateVerticalCorridor(int yStart, int yEnd, int xCenter)
     {
-        for (int y = Mathf.Min(yStart, yEnd); y <= Mathf.Max(yStart, yEnd); y++)
-            tilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
+        int ys = Mathf.Min(yStart, yEnd);
+        int ye = Mathf.Max(yStart, yEnd);
+
+        int half = corridorWidth / 2;
+
+        for (int y = ys; y <= ye; y++)
+        {
+            for (int dx = -half; dx <= half; dx++)
+            {
+                int x = xCenter + dx;
+                if (InMap(x, y))
+                    tilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
+            }
+        }
+    }
+
+    private bool InMap(int x, int y)
+    {
+        return x >= 0 && x < dungeonWidth && y >= 0 && y < dungeonHeight;
     }
 
     private void PaintTiles()
@@ -204,7 +239,8 @@ public class BSPDungeonGenerator : MonoBehaviour
         {
             for (int x = room.xMin; x < room.xMax; x++)
                 for (int y = room.yMin; y < room.yMax; y++)
-                    tilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
+                    if (InMap(x, y))
+                        tilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
         }
 
         // paint walls around floors
