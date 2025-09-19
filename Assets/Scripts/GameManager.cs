@@ -8,17 +8,17 @@ public class GameManager : MonoBehaviour
     [Header("Generation")]
     public BSPDungeonGenerator dungeonGenerator;
 
-    [Header("Player & Camera")]
-    public GameObject playerPrefab;   // <-- drag PlayerTank prefab here
-    public Camera mainCamera;         // <-- drag Main Camera here
-
     [Header("UI")]
     public Button nextLevelButton;
     public Button restartButton;
     public TMP_Text levelText;
 
+    [Header("Player & Camera")]
+    public GameObject playerPrefab;     // <- your PlayerTank prefab
+    public Camera mainCamera;           // <- assign Main Camera from scene
+
     private int currentLevel = 0;
-    private GameObject playerInstance;  // runtime-spawned player
+    private GameObject playerInstance;  // runtime-spawned tank
 
     private void Start()
     {
@@ -32,7 +32,7 @@ public class GameManager : MonoBehaviour
     {
         currentLevel++;
 
-        // Scale dungeon
+        // Grow map slightly each level (optional)
         dungeonGenerator.dungeonWidth  = 50 + (currentLevel * 10);
         dungeonGenerator.dungeonHeight = 50 + (currentLevel * 10);
         dungeonGenerator.maxDepth      = 4  + currentLevel;
@@ -40,57 +40,59 @@ public class GameManager : MonoBehaviour
         // Build dungeon
         dungeonGenerator.GenerateDungeon();
 
-        // UI
-        if (levelText) levelText.text = "Level " + currentLevel;
+        // Update UI
+        if (levelText != null) levelText.text = $"Level {currentLevel}";
 
-        // Spawn or move player
-        PlacePlayerInRoom();
+        // (Re)spawn the player safely
+        SpawnPlayer();
     }
 
-    private void PlacePlayerInRoom()
+    private void SpawnPlayer()
     {
-        // Make sure Rooms exists & has entries
-        if (dungeonGenerator.Rooms == null || dungeonGenerator.Rooms.Count == 0)
+        // Clean up old player (if any)
+        if (playerInstance != null)
         {
-            Debug.LogWarning("[GameManager] No rooms available for spawning player.");
-            return;
+            Destroy(playerInstance);
+            playerInstance = null;
         }
 
-        // Choose a room (first or random)
-        RectInt chosen = dungeonGenerator.Rooms[0];
-        // If you prefer random: RectInt chosen = dungeonGenerator.Rooms[Random.Range(0, dungeonGenerator.Rooms.Count)];
+        // Safe spawn world position:
+        // Prefer BSPDungeonGenerator.GetSpawnWorldPosition if present,
+        // otherwise fallback to the center of the first room.
+        Vector3 spawnPos = Vector3.zero;
 
-        // Tile/world position (tile center)
-        Vector2 roomCenter = new Vector2(
-            chosen.x + chosen.width  / 2f,
-            chosen.y + chosen.height / 2f
-        );
-        Vector3 spawnPos = new Vector3(roomCenter.x, roomCenter.y, 0f);
-
-        // Instantiate if needed, otherwise move existing instance
-        if (playerInstance == null)
+        // Try to use helper if your generator has it
+        try
         {
-            if (playerPrefab == null)
+            spawnPos = dungeonGenerator.GetSpawnWorldPosition(1);
+        }
+        catch
+        {
+            // Fallback: first-room center (grid coords -> world center-of-cell)
+            IReadOnlyList<RectInt> rooms = dungeonGenerator.Rooms;
+            if (rooms != null && rooms.Count > 0)
             {
-                Debug.LogError("[GameManager] Player prefab not assigned.");
-                return;
+                RectInt r = rooms[0];
+                Vector2 center = new Vector2(r.x + r.width / 2f, r.y + r.height / 2f);
+                spawnPos = dungeonGenerator.tilemap.CellToWorld(new Vector3Int(Mathf.RoundToInt(center.x), Mathf.RoundToInt(center.y), 0)) + new Vector3(0.5f, 0.5f, 0f);
             }
-            playerInstance = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
-        }
-        else
-        {
-            playerInstance.transform.position = spawnPos;
         }
 
-        // Center camera on player (orthographic)
+        // Spawn the tank
+        playerInstance = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
+
+        // Tell the camera who to follow
         if (mainCamera != null)
         {
-            if (!mainCamera.orthographic) mainCamera.orthographic = true;
-            Vector3 camPos = mainCamera.transform.position;
-            camPos.x = spawnPos.x;
-            camPos.y = spawnPos.y;
-            camPos.z = -10f; // keep camera in front
-            mainCamera.transform.position = camPos;
+            var follow = mainCamera.GetComponent<CameraFollow2D>();
+            if (follow != null)
+            {
+                follow.target = playerInstance.transform;   // <— key line (no SetTarget needed)
+            }
+
+            // Make sure camera z is behind the scene
+            var camPos = mainCamera.transform.position;
+            if (camPos.z > -5f) mainCamera.transform.position = new Vector3(camPos.x, camPos.y, -10f);
         }
     }
 
