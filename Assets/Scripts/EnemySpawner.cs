@@ -4,16 +4,16 @@ using UnityEngine;
 public class EnemySpawner : MonoBehaviour
 {
     [Header("Refs")]
-    public BSPDungeonGenerator dungeon;   // drag your BSPDungeonGeneratorObject
-    public GameObject enemyPrefab;        // drag the Enemy prefab
+    public BSPDungeonGenerator dungeon;
+    public GameObject enemyPrefab;
 
     [Header("Difficulty")]
-    public int startCount = 2;            // Level 1 enemies
-    public int addPerLevel = 2;           // + per level
+    public int startCount = 2;
+    public int addPerLevel = 2;
     public int maxEnemiesCap = 60;
 
     [Header("Placement")]
-    public int maxPlacementTries = 25;    // attempts to find a valid floor cell
+    public int maxPlacementTries = 25;
 
     static int alive;
     public static System.Action OnAllEnemiesDefeated;
@@ -32,6 +32,7 @@ public class EnemySpawner : MonoBehaviour
     {
         Clear();
         if (!dungeon || !enemyPrefab || !player) return;
+
         var rooms = dungeon.Rooms;
         if (rooms == null || rooms.Count == 0) return;
 
@@ -52,23 +53,24 @@ public class EnemySpawner : MonoBehaviour
             Vector3 pos = dungeon.floorsTilemap.CellToWorld(cell) + new Vector3(0.5f, 0.5f, 0f);
             var enemy = Instantiate(enemyPrefab, pos, Quaternion.identity);
             _active.Add(enemy);
+
+            // Wire the player into movement (so it can turn/engage).
+            var patrol = enemy.GetComponent<EnemyPatrol>();
+            if (patrol) patrol.SetTarget(player);
+            else Debug.LogWarning("[EnemySpawner] EnemyPatrol missing on enemy prefab.");
+
+            // No shooter.target anymore – EnemyShooting fires when AI flags say so.
         }
 
         alive = count;
         Debug.Log($"[EnemySpawner] Alive counter set to {alive}");
-
-        if (alive == 0)
-        {
-            Debug.Log("[EnemySpawner] No enemies spawned, firing event immediately");
-            OnAllEnemiesDefeated?.Invoke();
-        }
+        if (alive == 0) OnAllEnemiesDefeated?.Invoke();
     }
 
     int IndexOfRoomContainingCell(IReadOnlyList<RectInt> rooms, Vector3Int cell)
     {
         for (int i = 0; i < rooms.Count; i++)
-            if (rooms[i].Contains(new Vector2Int(cell.x, cell.y)))
-                return i;
+            if (rooms[i].Contains(new Vector2Int(cell.x, cell.y))) return i;
         return -1;
     }
 
