@@ -15,7 +15,6 @@ public class EnemySpawner : MonoBehaviour
     [Header("Placement")]
     public int maxPlacementTries = 25;    // attempts to find a valid floor cell
 
-    // simple global counter so enemies can notify us when they die
     static int alive;
     public static System.Action OnAllEnemiesDefeated;
 
@@ -36,34 +35,33 @@ public class EnemySpawner : MonoBehaviour
         var rooms = dungeon.Rooms;
         if (rooms == null || rooms.Count == 0) return;
 
-        // Which room is the player in?
         Vector3Int playerCell = dungeon.floorsTilemap.WorldToCell(player.position);
         int playerRoomIdx = IndexOfRoomContainingCell(rooms, playerCell);
 
         int count = Mathf.Clamp(startCount + (level - 1) * addPerLevel, 0, maxEnemiesCap);
+        Debug.Log($"[EnemySpawner] Spawning {count} enemies at level {level}");
 
         for (int i = 0; i < count; i++)
         {
-            // pick a room that's NOT the player's room
             int roomIdx = ChooseRandomRoomIndexExcluding(rooms.Count, playerRoomIdx);
             var room = rooms[roomIdx];
 
-            // pick a floor cell inside that room
             if (!TryPickRandomFloorCellInRoom(room, out Vector3Int cell))
-            {
-                // fallback = room center
                 cell = new Vector3Int(room.xMin + room.width / 2, room.yMin + room.height / 2, 0);
-            }
 
             Vector3 pos = dungeon.floorsTilemap.CellToWorld(cell) + new Vector3(0.5f, 0.5f, 0f);
             var enemy = Instantiate(enemyPrefab, pos, Quaternion.identity);
             _active.Add(enemy);
-
-            // optional: face right initially (or leave default)
         }
 
         alive = count;
-        if (alive == 0) OnAllEnemiesDefeated?.Invoke();
+        Debug.Log($"[EnemySpawner] Alive counter set to {alive}");
+
+        if (alive == 0)
+        {
+            Debug.Log("[EnemySpawner] No enemies spawned, firing event immediately");
+            OnAllEnemiesDefeated?.Invoke();
+        }
     }
 
     int IndexOfRoomContainingCell(IReadOnlyList<RectInt> rooms, Vector3Int cell)
@@ -100,12 +98,13 @@ public class EnemySpawner : MonoBehaviour
         return false;
     }
 
-    // called by Enemy when it dies
     public static void NotifyEnemyDied()
     {
+        Debug.Log($"[EnemySpawner] Enemy died. Alive before decrement = {alive}");
         if (--alive <= 0)
         {
             alive = 0;
+            Debug.Log("[EnemySpawner] All enemies dead, firing OnAllEnemiesDefeated");
             OnAllEnemiesDefeated?.Invoke();
         }
     }

@@ -9,34 +9,31 @@ public class GameManager : MonoBehaviour
     public BSPDungeonGenerator dungeonGenerator;
 
     [Header("Enemies")]
-    public EnemySpawner enemySpawner;   // <-- NEW: hook to EnemySpawner component
+    public EnemySpawner enemySpawner;   // assign in Inspector
 
     [Header("UI")]
-    public Button nextLevelButton;
-    public Button restartButton;
+    public Button nextLevelButton;      // optional, safe if None
+    public Button restartButton;        // optional, safe if None
     public TMP_Text levelText;
 
     [Header("Player & Camera")]
-    public GameObject playerPrefab;     // <- your PlayerTank prefab
-    public Camera mainCamera;           // <- assign Main Camera from scene
+    public GameObject playerPrefab;
+    public Camera mainCamera;
 
     private int currentLevel = 0;
-    private GameObject playerInstance;  // runtime-spawned tank
+    private GameObject playerInstance;
 
     private void Start()
     {
         if (nextLevelButton) nextLevelButton.onClick.AddListener(GenerateLevel);
         if (restartButton)   restartButton.onClick.AddListener(RestartGame);
 
-        // NEW: listen for wave cleared
         EnemySpawner.OnAllEnemiesDefeated += HandleLevelCleared;
-
         GenerateLevel();
     }
 
     private void OnDestroy()
     {
-        // NEW: unsubscribe
         EnemySpawner.OnAllEnemiesDefeated -= HandleLevelCleared;
     }
 
@@ -44,50 +41,40 @@ public class GameManager : MonoBehaviour
     {
         currentLevel++;
 
-        // Grow map slightly each level (optional)
+        // grow map a bit each level (optional)
         dungeonGenerator.dungeonWidth  = 50 + (currentLevel * 10);
         dungeonGenerator.dungeonHeight = 50 + (currentLevel * 10);
         dungeonGenerator.maxDepth      = 4  + currentLevel;
 
-        // Build dungeon
         dungeonGenerator.GenerateDungeon();
 
-        // Update UI
         if (levelText != null) levelText.text = $"Level {currentLevel}";
 
-        // (Re)spawn the player safely
         SpawnPlayer();
 
-        // NEW: spawn enemies for this level AFTER player exists
+        // spawn enemies AFTER player exists
         if (enemySpawner && playerInstance)
-        {
             enemySpawner.SpawnForLevel(currentLevel, playerInstance.transform);
-        }
 
-        // NEW: lock Next Level button until wave cleared (optional)
-        if (nextLevelButton) nextLevelButton.interactable = false;
+        if (nextLevelButton) nextLevelButton.interactable = false; // optional
     }
 
     private void SpawnPlayer()
     {
-        // Clean up old player (if any)
         if (playerInstance != null)
         {
             Destroy(playerInstance);
             playerInstance = null;
         }
 
-        // Safe spawn world position:
         Vector3 spawnPos = Vector3.zero;
 
         try
         {
-            // Use BSPDungeonGenerator helper
             spawnPos = dungeonGenerator.GetSpawnWorldPosition(1);
         }
         catch
         {
-            // Fallback: first-room center
             IReadOnlyList<RectInt> rooms = dungeonGenerator.Rooms;
             if (rooms != null && rooms.Count > 0)
             {
@@ -99,40 +86,37 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        // Spawn the tank
         playerInstance = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
 
-        // Tell the camera who to follow
+        // OPTIONAL: reset player health each level
+        var hp = playerInstance.GetComponent<Health>();
+        if (hp != null) hp.Heal(9999); // clamp inside Health to max
+
         if (mainCamera != null)
         {
             var follow = mainCamera.GetComponent<CameraFollow2D>();
-            if (follow != null)
-            {
-                follow.target = playerInstance.transform;
-            }
+            if (follow != null) follow.target = playerInstance.transform;
 
-            // Make sure camera z is behind the scene
             var camPos = mainCamera.transform.position;
             if (camPos.z > -5f)
                 mainCamera.transform.position = new Vector3(camPos.x, camPos.y, -10f);
         }
     }
 
-    // NEW: wave cleared → enable Next or auto-advance
     private void HandleLevelCleared()
     {
-        if (nextLevelButton) nextLevelButton.interactable = true;
-        // Or auto-advance instead:
-        // Invoke(nameof(GenerateLevel), 1.0f);
+        Debug.Log("[GameManager] All enemies cleared, advancing to next level...");
+        // Auto-advance after 1 second
+        Invoke(nameof(GenerateLevel), 1.0f);
+
+        // If you prefer using the button instead, comment the line above and:
+        // if (nextLevelButton) nextLevelButton.interactable = true;
     }
 
     public void RestartGame()
     {
         currentLevel = 0;
-
-        // NEW: clear any remaining enemies before regenerating
         if (enemySpawner) enemySpawner.Clear();
-
         GenerateLevel();
     }
 }

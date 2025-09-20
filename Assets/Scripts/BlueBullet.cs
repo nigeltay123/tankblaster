@@ -7,7 +7,7 @@ public class BlueBullet : MonoBehaviour
     public float maxLifetime = 3f;
 
     [Header("Damage")]
-    public float damage = 1f;
+    public int damage = 1;  // integer, works with Health.TakeDamage(int)
     [Tooltip("Layers this bullet can hit (e.g., Enemy, Walls).")]
     public LayerMask hitLayers;
 
@@ -37,16 +37,14 @@ public class BlueBullet : MonoBehaviour
         // Ignore non-target layers
         if (((1 << other.gameObject.layer) & hitLayers) == 0) return;
 
-        // Optional: deal damage if the target supports it
-        var dmg = other.GetComponent<IDamageable>();
-        if (dmg != null) dmg.TakeDamage(damage);
+        // Damage if the target has Health
+        var health = other.GetComponent<Health>();
+        if (health != null)
+        {
+            health.TakeDamage(damage);
+        }
 
+        // Bullet always disappears on hit
         Destroy(gameObject);
     }
-}
-
-// Optional interface for your enemies to implement
-public interface IDamageable
-{
-    void TakeDamage(float amount);
 }
