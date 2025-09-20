@@ -1,12 +1,15 @@
 using System.Collections.Generic;
-using System.Linq;                  // for OrderByDescending
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
 public class BSPDungeonGenerator : MonoBehaviour
 {
-    [Header("Tilemap & Tiles (single tilemap setup)")]
-    public Tilemap tilemap;         // single tilemap (floors + walls)
+    [Header("Tilemaps (split setup)")]
+    public Tilemap floorsTilemap;   // floors only (no collider)
+    public Tilemap wallsTilemap;    // walls only (with collider, on "wall" layer)
+
+    [Header("Tiles")]
     public TileBase floorTile;
     public TileBase wallTile;
 
@@ -16,43 +19,34 @@ public class BSPDungeonGenerator : MonoBehaviour
 
     public int minRoomSize = 6;
     public int maxRoomSize = 15;
-    public int maxDepth = 5;        // Controls how many splits
+    public int maxDepth = 5;
 
     [Header("Corridor Settings")]
-    [Min(1)] public int corridorWidth = 3; // <-- tweak in Inspector (odd numbers center perfectly)
+    [Min(1)] public int corridorWidth = 3;
 
-    // BSP tree & rooms
     private BSPNode rootNode;
     private List<RectInt> rooms;
 
-    // Expose rooms (read-only)
     public IReadOnlyList<RectInt> Rooms => rooms;
 
-    /// <summary>
-    /// Returns a safe spawn in WORLD space:
-    /// - Prefers a floor cell inside the largest room, padded away from walls.
-    /// - Falls back to a clamped room center if no padded cell is found.
-    /// Call this AFTER GenerateDungeon() (when tiles are painted).
-    /// </summary>
+    // ----------------- Spawn Helper -----------------
+
     public Vector3 GetSpawnWorldPosition(int padding = 1)
     {
-        if (rooms == null || rooms.Count == 0 || tilemap == null)
+        if (rooms == null || rooms.Count == 0 || floorsTilemap == null)
             return Vector3.zero;
 
-        // pick the largest room to give the player space
         RectInt largest = rooms.OrderByDescending(r => r.width * r.height).First();
 
-        // 1) Try to find a padded floor cell (not hugging walls)
         Vector3Int? paddedCell = FindPaddedFloorCell(largest, padding);
         if (paddedCell.HasValue)
         {
-            Vector3 world = tilemap.CellToWorld(paddedCell.Value);
+            Vector3 world = floorsTilemap.CellToWorld(paddedCell.Value);
             return world + new Vector3(0.5f, 0.5f, 0f);
         }
 
-        // 2) Fallback: clamped center cell inside room bounds
         var center = new Vector3Int(
-            largest.xMin + largest.width  / 2,
+            largest.xMin + largest.width / 2,
             largest.yMin + largest.height / 2,
             0
         );
@@ -60,24 +54,19 @@ public class BSPDungeonGenerator : MonoBehaviour
         center.x = Mathf.Clamp(center.x, largest.xMin + padding, largest.xMax - 1 - padding);
         center.y = Mathf.Clamp(center.y, largest.yMin + padding, largest.yMax - 1 - padding);
 
-        Vector3 fallback = tilemap.CellToWorld(center);
+        Vector3 fallback = floorsTilemap.CellToWorld(center);
         return fallback + new Vector3(0.5f, 0.5f, 0f);
     }
 
-    /// <summary>
-    /// Scans the given room for a floor tile with 'padding' tiles of clearance
-    /// from walls (i.e., neighbors are also floor). Returns the first match.
-    /// </summary>
     private Vector3Int? FindPaddedFloorCell(RectInt room, int padding)
     {
-        // define a smaller interior rectangle to avoid edges
         int xStart = room.xMin + padding;
         int xEnd   = room.xMax - 1 - padding;
         int yStart = room.yMin + padding;
         int yEnd   = room.yMax - 1 - padding;
 
         if (xStart > xEnd || yStart > yEnd)
-            return null; // room too small for requested padding
+            return null;
 
         for (int y = yStart; y <= yEnd; y++)
         {
@@ -86,10 +75,9 @@ public class BSPDungeonGenerator : MonoBehaviour
                 var cell = new Vector3Int(x, y, 0);
                 if (!IsFloor(cell)) continue;
 
-                // all 4-neighbors must be floor too (keeps us off walls)
                 if (IsFloor(cell + Vector3Int.right) &&
-                    IsFloor(cell + Vector3Int.left)  &&
-                    IsFloor(cell + Vector3Int.up)    &&
+                    IsFloor(cell + Vector3Int.left) &&
+                    IsFloor(cell + Vector3Int.up) &&
                     IsFloor(cell + Vector3Int.down))
                 {
                     return cell;
@@ -101,15 +89,17 @@ public class BSPDungeonGenerator : MonoBehaviour
 
     private bool IsFloor(Vector3Int cell)
     {
-        var t = tilemap.GetTile(cell);
+        var t = floorsTilemap.GetTile(cell);
         return t != null && t == floorTile;
     }
 
-    // ------------------ Generation ------------------
+    // ----------------- Generation -----------------
 
     public void GenerateDungeon()
     {
-        tilemap.ClearAllTiles();
+        floorsTilemap.ClearAllTiles();
+        wallsTilemap.ClearAllTiles();
+
         rooms = new List<RectInt>();
 
         rootNode = new BSPNode(new RectInt(0, 0, dungeonWidth, dungeonHeight));
@@ -140,7 +130,7 @@ public class BSPDungeonGenerator : MonoBehaviour
             node.Right = new BSPNode(new RectInt(node.Rect.xMin + splitX, node.Rect.yMin, node.Rect.width - splitX, node.Rect.height));
         }
 
-        Split(node.Left,  depth + 1);
+        Split(node.Left, depth + 1);
         Split(node.Right, depth + 1);
     }
 
@@ -148,19 +138,20 @@ public class BSPDungeonGenerator : MonoBehaviour
     {
         if (node.IsLeaf)
         {
-            int roomWidth  = Random.Range(minRoomSize, Mathf.Min(maxRoomSize, node.Rect.width  - 2));
+            int roomWidth  = Random.Range(minRoomSize, Mathf.Min(maxRoomSize, node.Rect.width - 2));
             int roomHeight = Random.Range(minRoomSize, Mathf.Min(maxRoomSize, node.Rect.height - 2));
 
-            int roomX = Random.Range(node.Rect.xMin + 1, node.Rect.xMax - roomWidth  - 1);
+            int roomX = Random.Range(node.Rect.xMin + 1, node.Rect.xMax - roomWidth - 1);
             int roomY = Random.Range(node.Rect.yMin + 1, node.Rect.yMax - roomHeight - 1);
 
             RectInt room = new RectInt(roomX, roomY, roomWidth, roomHeight);
             node.Room = room;
+            node.HasRoom = true;
             rooms.Add(room);
         }
         else
         {
-            if (node.Left  != null) CreateRooms(node.Left);
+            if (node.Left != null) CreateRooms(node.Left);
             if (node.Right != null) CreateRooms(node.Right);
         }
     }
@@ -188,15 +179,11 @@ public class BSPDungeonGenerator : MonoBehaviour
     private Vector2Int GetRoomCenter(RectInt room)
         => new Vector2Int(room.xMin + room.width / 2, room.yMin + room.height / 2);
 
-    // --------- corridor carving (now width = corridorWidth) ---------
-
     private void CreateHorizontalCorridor(int xStart, int xEnd, int yCenter)
     {
         int xs = Mathf.Min(xStart, xEnd);
         int xe = Mathf.Max(xStart, xEnd);
-
-        // center around yCenter
-        int half = corridorWidth / 2; // works for odd; with even, one side will be +1 wider
+        int half = corridorWidth / 2;
 
         for (int x = xs; x <= xe; x++)
         {
@@ -204,7 +191,7 @@ public class BSPDungeonGenerator : MonoBehaviour
             {
                 int y = yCenter + dy;
                 if (InMap(x, y))
-                    tilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
+                    floorsTilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
             }
         }
     }
@@ -213,7 +200,6 @@ public class BSPDungeonGenerator : MonoBehaviour
     {
         int ys = Mathf.Min(yStart, yEnd);
         int ye = Mathf.Max(yStart, yEnd);
-
         int half = corridorWidth / 2;
 
         for (int y = ys; y <= ye; y++)
@@ -222,7 +208,7 @@ public class BSPDungeonGenerator : MonoBehaviour
             {
                 int x = xCenter + dx;
                 if (InMap(x, y))
-                    tilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
+                    floorsTilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
             }
         }
     }
@@ -234,17 +220,17 @@ public class BSPDungeonGenerator : MonoBehaviour
 
     private void PaintTiles()
     {
-        // paint floors (rooms)
+        // paint floors
         foreach (RectInt room in rooms)
         {
             for (int x = room.xMin; x < room.xMax; x++)
                 for (int y = room.yMin; y < room.yMax; y++)
                     if (InMap(x, y))
-                        tilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
+                        floorsTilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
         }
 
-        // paint walls around floors
-        BoundsInt bounds = tilemap.cellBounds;
+        // paint walls
+        BoundsInt bounds = floorsTilemap.cellBounds;
 
         for (int x = bounds.xMin - 1; x <= bounds.xMax + 1; x++)
         {
@@ -252,9 +238,9 @@ public class BSPDungeonGenerator : MonoBehaviour
             {
                 Vector3Int pos = new Vector3Int(x, y, 0);
 
-                if (tilemap.GetTile(pos) == null && HasFloorNeighbor(pos))
+                if (floorsTilemap.GetTile(pos) == null && HasFloorNeighbor(pos))
                 {
-                    tilemap.SetTile(pos, wallTile);
+                    wallsTilemap.SetTile(pos, wallTile);
                 }
             }
         }
@@ -271,9 +257,24 @@ public class BSPDungeonGenerator : MonoBehaviour
 
         foreach (var dir in directions)
         {
-            if (tilemap.GetTile(pos + dir) == floorTile)
+            if (floorsTilemap.GetTile(pos + dir) == floorTile)
                 return true;
         }
         return false;
     }
+}
+
+// ----------------- Helper class -----------------
+public class BSPNode
+{
+    public RectInt Rect;
+    public BSPNode Left;
+    public BSPNode Right;
+
+    public RectInt Room;
+    public bool HasRoom;
+
+    public bool IsLeaf => Left == null && Right == null;
+
+    public BSPNode(RectInt rect) { Rect = rect; }
 }

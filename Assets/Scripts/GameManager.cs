@@ -8,6 +8,9 @@ public class GameManager : MonoBehaviour
     [Header("Generation")]
     public BSPDungeonGenerator dungeonGenerator;
 
+    [Header("Enemies")]
+    public EnemySpawner enemySpawner;   // <-- NEW: hook to EnemySpawner component
+
     [Header("UI")]
     public Button nextLevelButton;
     public Button restartButton;
@@ -25,7 +28,16 @@ public class GameManager : MonoBehaviour
         if (nextLevelButton) nextLevelButton.onClick.AddListener(GenerateLevel);
         if (restartButton)   restartButton.onClick.AddListener(RestartGame);
 
+        // NEW: listen for wave cleared
+        EnemySpawner.OnAllEnemiesDefeated += HandleLevelCleared;
+
         GenerateLevel();
+    }
+
+    private void OnDestroy()
+    {
+        // NEW: unsubscribe
+        EnemySpawner.OnAllEnemiesDefeated -= HandleLevelCleared;
     }
 
     public void GenerateLevel()
@@ -45,6 +57,15 @@ public class GameManager : MonoBehaviour
 
         // (Re)spawn the player safely
         SpawnPlayer();
+
+        // NEW: spawn enemies for this level AFTER player exists
+        if (enemySpawner && playerInstance)
+        {
+            enemySpawner.SpawnForLevel(currentLevel, playerInstance.transform);
+        }
+
+        // NEW: lock Next Level button until wave cleared (optional)
+        if (nextLevelButton) nextLevelButton.interactable = false;
     }
 
     private void SpawnPlayer()
@@ -57,24 +78,24 @@ public class GameManager : MonoBehaviour
         }
 
         // Safe spawn world position:
-        // Prefer BSPDungeonGenerator.GetSpawnWorldPosition if present,
-        // otherwise fallback to the center of the first room.
         Vector3 spawnPos = Vector3.zero;
 
-        // Try to use helper if your generator has it
         try
         {
+            // Use BSPDungeonGenerator helper
             spawnPos = dungeonGenerator.GetSpawnWorldPosition(1);
         }
         catch
         {
-            // Fallback: first-room center (grid coords -> world center-of-cell)
+            // Fallback: first-room center
             IReadOnlyList<RectInt> rooms = dungeonGenerator.Rooms;
             if (rooms != null && rooms.Count > 0)
             {
                 RectInt r = rooms[0];
                 Vector2 center = new Vector2(r.x + r.width / 2f, r.y + r.height / 2f);
-                spawnPos = dungeonGenerator.tilemap.CellToWorld(new Vector3Int(Mathf.RoundToInt(center.x), Mathf.RoundToInt(center.y), 0)) + new Vector3(0.5f, 0.5f, 0f);
+                spawnPos = dungeonGenerator.floorsTilemap.CellToWorld(
+                    new Vector3Int(Mathf.RoundToInt(center.x), Mathf.RoundToInt(center.y), 0)
+                ) + new Vector3(0.5f, 0.5f, 0f);
             }
         }
 
@@ -87,18 +108,31 @@ public class GameManager : MonoBehaviour
             var follow = mainCamera.GetComponent<CameraFollow2D>();
             if (follow != null)
             {
-                follow.target = playerInstance.transform;   // <— key line (no SetTarget needed)
+                follow.target = playerInstance.transform;
             }
 
             // Make sure camera z is behind the scene
             var camPos = mainCamera.transform.position;
-            if (camPos.z > -5f) mainCamera.transform.position = new Vector3(camPos.x, camPos.y, -10f);
+            if (camPos.z > -5f)
+                mainCamera.transform.position = new Vector3(camPos.x, camPos.y, -10f);
         }
+    }
+
+    // NEW: wave cleared → enable Next or auto-advance
+    private void HandleLevelCleared()
+    {
+        if (nextLevelButton) nextLevelButton.interactable = true;
+        // Or auto-advance instead:
+        // Invoke(nameof(GenerateLevel), 1.0f);
     }
 
     public void RestartGame()
     {
         currentLevel = 0;
+
+        // NEW: clear any remaining enemies before regenerating
+        if (enemySpawner) enemySpawner.Clear();
+
         GenerateLevel();
     }
 }
