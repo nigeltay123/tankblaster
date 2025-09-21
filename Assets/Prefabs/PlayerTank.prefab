@@ -222,7 +222,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   firePoint: {fileID: 2557029001630223651}
   blueBulletPrefab: {fileID: 8960125733885027525, guid: 7a7c2eafdab732f47bc0b7909cb0db26, type: 3}
-  fireRate: 6
+  fireRate: 3
   autoFire: 1
 --- !u!114 &-8902050055073839330
 MonoBehaviour:

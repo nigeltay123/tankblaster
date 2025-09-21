@@ -20,6 +20,14 @@ public class GameManager : MonoBehaviour
     public GameObject playerPrefab;
     public Camera mainCamera;
 
+    // ---------- DEV TESTING ----------
+    [Header("Dev Testing")]
+    [Tooltip("If enabled, uses a much smaller map so you can reach milestones fast.")]
+    public bool devSmallMap = false;
+    public int devWidth  = 28;
+    public int devHeight = 28;
+    public int devDepth  = 3;
+
     private int currentLevel = 0;
     private GameObject playerInstance;
 
@@ -41,10 +49,24 @@ public class GameManager : MonoBehaviour
     {
         currentLevel++;
 
-        // grow map a bit each level (optional)
-        dungeonGenerator.dungeonWidth  = 50 + (currentLevel * 10);
-        dungeonGenerator.dungeonHeight = 50 + (currentLevel * 10);
-        dungeonGenerator.maxDepth      = 4  + currentLevel;
+        // Tell DifficultyManager what level we’re on BEFORE spawning enemies
+        if (DifficultyManager.Instance != null)
+            DifficultyManager.Instance.currentLevel = currentLevel;
+
+        // --- map sizing ---
+        if (devSmallMap)
+        {
+            dungeonGenerator.dungeonWidth  = devWidth;
+            dungeonGenerator.dungeonHeight = devHeight;
+            dungeonGenerator.maxDepth      = devDepth;
+        }
+        else
+        {
+            // grow map a bit each level (your original logic)
+            dungeonGenerator.dungeonWidth  = 50 + (currentLevel * 10);
+            dungeonGenerator.dungeonHeight = 50 + (currentLevel * 10);
+            dungeonGenerator.maxDepth      = 4  + currentLevel;
+        }
 
         dungeonGenerator.GenerateDungeon();
 
@@ -106,9 +128,7 @@ public class GameManager : MonoBehaviour
     private void HandleLevelCleared()
     {
         Debug.Log("[GameManager] All enemies cleared, advancing to next level...");
-        // Auto-advance after 1 second
         Invoke(nameof(GenerateLevel), 1.0f);
-
         // If you prefer using the button instead, comment the line above and:
         // if (nextLevelButton) nextLevelButton.interactable = true;
     }
@@ -118,5 +138,35 @@ public class GameManager : MonoBehaviour
         currentLevel = 0;
         if (enemySpawner) enemySpawner.Clear();
         GenerateLevel();
+    }
+
+    // ---------- DEV HELPERS ----------
+    [ContextMenu("DEV: Jump To Level 5")]
+    public void EditorJumpToLevel5() => JumpToLevel(5);
+
+    [ContextMenu("DEV: Jump To Level 10")]
+    public void EditorJumpToLevel10() => JumpToLevel(10);
+
+    /// <summary>
+    /// Jump directly to a level. Sets internal counter so GenerateLevel builds that level next.
+    /// </summary>
+    public void JumpToLevel(int level)
+    {
+        if (level < 1) level = 1;
+        // currentLevel increments inside GenerateLevel(), so set to level-1 here
+        currentLevel = level - 1;
+        GenerateLevel();
+    }
+
+    /// <summary>
+    /// Toggle small map mode at runtime and regenerate current level.
+    /// </summary>
+    public void ToggleSmallMapAndRegen()
+    {
+        devSmallMap = !devSmallMap;
+        // Re-run current level sizing: set to (currentLevel-1) then generate
+        currentLevel = Mathf.Max(0, currentLevel - 1);
+        GenerateLevel();
+        Debug.Log($"[GameManager] devSmallMap now {(devSmallMap ? "ON" : "OFF")}");
     }
 }

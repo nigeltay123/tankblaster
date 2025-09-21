@@ -42,4 +42,6 @@ public class Health : MonoBehaviour
         if (_hp <= 0) return;
         _hp = Mathf.Min(maxHealth, _hp + Mathf.Max(1, amount));
     }
+    public int Current => _hp;
+
 }
