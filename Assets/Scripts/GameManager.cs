@@ -16,6 +16,9 @@ public class GameManager : MonoBehaviour
     public Button restartButton;        // optional, safe if None
     public TMP_Text levelText;
 
+    [Header("Upgrades")]
+    public UpgradeUI upgradeUI;         // ← drag the UpgradeUI object here in Inspector
+
     [Header("Player & Camera")]
     public GameObject playerPrefab;
     public Camera mainCamera;
@@ -49,7 +52,7 @@ public class GameManager : MonoBehaviour
     {
         currentLevel++;
 
-        // Tell DifficultyManager what level we’re on BEFORE spawning enemies
+        // Tell DifficultyManager the level BEFORE spawning enemies
         if (DifficultyManager.Instance != null)
             DifficultyManager.Instance.currentLevel = currentLevel;
 
@@ -110,7 +113,10 @@ public class GameManager : MonoBehaviour
 
         playerInstance = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
 
-        // OPTIONAL: reset player health each level
+        // Apply persistent upgrades (HP bonus, etc.) to the new player
+        PlayerUpgrades.ApplyToSpawnedPlayer(playerInstance);
+
+        // OPTIONAL: top up to new max
         var hp = playerInstance.GetComponent<Health>();
         if (hp != null) hp.Heal(9999); // clamp inside Health to max
 
@@ -127,8 +133,17 @@ public class GameManager : MonoBehaviour
 
     private void HandleLevelCleared()
     {
+        // Every 5 levels, pause and show the upgrade choices
+        if (DifficultyManager.IsMilestoneLevel() && upgradeUI != null)
+        {
+            upgradeUI.Show();     // pauses via Time.timeScale = 0
+            return;
+        }
+
+        // Otherwise auto-advance after 1 second
         Debug.Log("[GameManager] All enemies cleared, advancing to next level...");
         Invoke(nameof(GenerateLevel), 1.0f);
+
         // If you prefer using the button instead, comment the line above and:
         // if (nextLevelButton) nextLevelButton.interactable = true;
     }
