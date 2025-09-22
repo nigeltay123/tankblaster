@@ -5,22 +5,23 @@ using UnityEngine.UI;
 public class PlayerHUD : MonoBehaviour
 {
     [Header("Refs")]
-    public Health playerHealth;   // drag the player instance (or a prefab if spawned early)
+    public Health playerHealth;   // player instance
     public TMP_Text levelText;    // e.g., "Lv 5"
     public TMP_Text hpText;       // e.g., "HP 5 / 7"
-    public Slider hpBar;          // optional: fill shows HP%
+    public Slider  hpBar;         // fill shows HP%
+
+    int _lastMax = 0;
 
     void Update()
     {
-        // level
         if (levelText)
             levelText.text = $"Lv {DifficultyManager.Level}";
 
-        // hp
         if (playerHealth)
         {
             int cur = playerHealth.Current;
             int max = playerHealth.maxHealth;
+            _lastMax = max;
 
             if (hpText) hpText.text = $"HP {cur} / {max}";
             if (hpBar)
@@ -31,9 +32,22 @@ public class PlayerHUD : MonoBehaviour
         }
         else
         {
-            // try to find the player once (covers respawn)
+            // try find the player (covers respawn)
             var p = GameObject.FindWithTag("Player");
-            if (p) playerHealth = p.GetComponent<Health>();
+            if (p)
+            {
+                playerHealth = p.GetComponent<Health>();
+            }
+            else
+            {
+                // no player in scene → show empty bar
+                if (hpText) hpText.text = $"HP 0 / {_lastMax}";
+                if (hpBar)
+                {
+                    hpBar.maxValue = (_lastMax > 0 ? _lastMax : 1);
+                    hpBar.value = 0;
+                }
+            }
         }
     }
 }

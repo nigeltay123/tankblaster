@@ -2367,7 +2367,7 @@ MonoBehaviour:
   upgradeUI: {fileID: 1125357140}
   playerPrefab: {fileID: 7463392081558834588, guid: 0124e6b139a7d594397ee538d6d54f5d, type: 3}
   mainCamera: {fileID: 519420031}
-  devSmallMap: 1
+  devSmallMap: 0
   devWidth: 28
   devHeight: 28
   devDepth: 3
@@ -2401,7 +2401,7 @@ MonoBehaviour:
   dungeon: {fileID: 2144674403}
   enemyPrefab: {fileID: 4182630958471827749, guid: 5163604082a3f7440bb7e97372239916, type: 3}
   startCount: 2
-  addPerLevel: 0
+  addPerLevel: 2
   maxEnemiesCap: 60
   maxPlacementTries: 25
 --- !u!1 &2144674402

@@ -5,29 +5,10 @@ public class UpgradeUI : MonoBehaviour
     [Header("Panel that contains the two buttons")]
     public GameObject panel;
 
-    [Header("Refs (optional)")]
-    public PlayerUpgrades upgrades;   // you can leave this empty
-
     void Awake()
     {
-        EnsureUpgradesExists();
         if (panel) panel.SetActive(false);
-        Debug.Log($"[UpgradeUI] Awake. panel={(panel? "ok":"NULL")} upgrades={(upgrades? "ok":"NULL")}");
-    }
-
-    void EnsureUpgradesExists()
-    {
-        // already have one?
-        if (upgrades) return;
-
-        // try find one in the scene
-        upgrades = PlayerUpgrades.Instance ?? FindObjectOfType<PlayerUpgrades>();
-        if (upgrades) return;
-
-        // still none: create one (will DontDestroyOnLoad in Awake)
-        var go = new GameObject("Upgrades");
-        upgrades = go.AddComponent<PlayerUpgrades>();
-        Debug.Log("[UpgradeUI] Created PlayerUpgrades at runtime.");
+        Debug.Log($"[UpgradeUI] Awake, panel={(panel ? "ok" : "NULL")}");
     }
 
     public void Show()
@@ -37,30 +18,34 @@ public class UpgradeUI : MonoBehaviour
         Debug.Log("[UpgradeUI] Show → paused.");
     }
 
-    void Hide()
+    public void Hide()
     {
         if (panel) panel.SetActive(false);
         Time.timeScale = 1f;
         Debug.Log("[UpgradeUI] Hide → resumed.");
     }
 
+    // Used when the player dies while the upgrade panel is open.
+    public void HideImmediate()
+    {
+        if (panel) panel.SetActive(false);
+        // IMPORTANT: do NOT resume time here; GameManager will keep it paused for Game Over.
+        Debug.Log("[UpgradeUI] HideImmediate (no time resume).");
+    }
+
+    // Button hook: +2 Max HP
     public void OnPickHealth()
     {
-        EnsureUpgradesExists();
-
-        var p  = GameObject.FindWithTag("Player");
+        var p = GameObject.FindWithTag("Player");
         var hp = p ? p.GetComponent<Health>() : null;
-
-        Debug.Log($"[UpgradeUI] OnPickHealth: upgrades={(upgrades? "ok":"NULL")}, player={(p? "ok":"NULL")}, health={(hp? "ok":"NULL")}");
-        upgrades?.PickHealth(hp);
+        PlayerUpgrades.Instance.PickHealth(hp);
         ContinueToNextLevel();
     }
 
+    // Button hook: +1 Damage
     public void OnPickDamage()
     {
-        EnsureUpgradesExists();
-        Debug.Log($"[UpgradeUI] OnPickDamage: upgrades={(upgrades? "ok":"NULL")}");
-        upgrades?.PickDamage();
+        PlayerUpgrades.Instance.PickDamage();
         ContinueToNextLevel();
     }
 
@@ -69,6 +54,5 @@ public class UpgradeUI : MonoBehaviour
         Hide();
         var gm = FindObjectOfType<GameManager>();
         if (gm) gm.GenerateLevel();
-        else Debug.LogWarning("[UpgradeUI] ContinueToNextLevel: GameManager not found.");
     }
 }

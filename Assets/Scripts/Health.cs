@@ -15,9 +15,14 @@ public class Health : MonoBehaviour
     public void TakeDamage(int amount)
     {
         if (_hp <= 0) return;
+
         _hp -= Mathf.Max(1, amount);
 
-        if (_hp <= 0) Die();
+        if (_hp <= 0)
+        {
+            _hp = 0; // ensure it never goes negative
+            Die();
+        }
     }
 
     void Die()
@@ -26,22 +31,28 @@ public class Health : MonoBehaviour
         {
             // inform the wave tracker
             EnemySpawner.NotifyEnemyDied();
+            Destroy(gameObject);
         }
         else // Player
         {
-            // simple auto-restart on death (no buttons needed)
             var gm = FindObjectOfType<GameManager>();
-            gm?.RestartGame();
-        }
+            if (gm != null)
+            {
+                Debug.Log("[Health] Player died → telling GameManager to handle game over.");
+                gm.OnPlayerDied();
+            }
 
-        Destroy(gameObject);
+            // remove the player tank object
+            Destroy(gameObject);
+        }
     }
 
     public void Heal(int amount)
     {
         if (_hp <= 0) return;
+
         _hp = Mathf.Min(maxHealth, _hp + Mathf.Max(1, amount));
     }
-    public int Current => _hp;
 
+    public int Current => _hp;
 }
